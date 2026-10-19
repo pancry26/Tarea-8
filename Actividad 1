@@ -1,1 +1,90 @@
+//requires java.sql;
+//requires org.xerial.sqlitejdbc;
 
+import java.sql.*;
+
+public class Main {
+    static final String URL = "jdbc:sqlite:actividad1.db";
+
+    public static void main(String[] args) {
+        try (Connection con = DriverManager.getConnection(URL)) {
+            try (Statement st = con.createStatement()) {
+                st.executeUpdate("CREATE TABLE IF NOT EXISTS productos (id INTEGER PRIMARY KEY, nombre TEXT NOT NULL, precio REAL NOT NULL)");
+            }
+
+            con.setAutoCommit(false);
+
+            try {
+                try (Statement st = con.createStatement()) {
+                    st.executeUpdate("DELETE FROM productos");
+                }
+
+                insertar(con, 1, "Laptop", 2500);
+                insertar(con, 2, "Mouse", 50);
+                insertar(con, 3, "Teclado", 120);
+                con.commit();
+                System.out.println("REGISTROS INSERTADOS");
+                mostrar(con);
+
+                actualizar(con, 2, "Mouse Gamer", 85);
+                con.commit();
+                System.out.println("\nREGISTROS ACTUALIZADOS");
+                mostrar(con);
+
+                eliminar(con, 3);
+                con.commit();
+                System.out.println("\nREGISTROS DESPUES DE ELIMINAR");
+                mostrar(con);
+
+                insertar(con, 4, "Monitor", 800);
+                con.rollback();
+                System.out.println("\nDESPUES DE ROLLBACK");
+                mostrar(con);
+
+            } catch (SQLException e) {
+                con.rollback();
+                System.out.println("Error: " + e.getMessage());
+            }
+        } catch (SQLException e) {
+            System.out.println("Error de conexion: " + e.getMessage());
+        }
+    }
+
+    static void insertar(Connection con, int id, String nombre, double precio) throws SQLException {
+        String sql = "INSERT INTO productos VALUES (?, ?, ?)";
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            ps.setString(2, nombre);
+            ps.setDouble(3, precio);
+            ps.executeUpdate();
+        }
+    }
+
+    static void actualizar(Connection con, int id, String nombre, double precio) throws SQLException {
+        String sql = "UPDATE productos SET nombre=?, precio=? WHERE id=?";
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, nombre);
+            ps.setDouble(2, precio);
+            ps.setInt(3, id);
+            ps.executeUpdate();
+        }
+    }
+
+    static void eliminar(Connection con, int id) throws SQLException {
+        try (PreparedStatement ps = con.prepareStatement("DELETE FROM productos WHERE id=?")) {
+            ps.setInt(1, id);
+            ps.executeUpdate();
+        }
+    }
+
+    static void mostrar(Connection con) throws SQLException {
+        try (PreparedStatement ps = con.prepareStatement("SELECT * FROM productos ORDER BY id");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                System.out.println(rs.getInt("id") + " | " +
+                        rs.getString("nombre") + " | S/ " + rs.getDouble("precio"));
+            }
+        }
+    }
+}
+  
