@@ -1,1 +1,203 @@
+import java.sql.*;
+import java.util.*;
 
+public class Main {
+    static Scanner sc = new Scanner(System.in);
+    static final String URL = "jdbc:sqlite:ejercicio1.db";
+
+    public static void main(String[] args) {
+
+        System.out.println("Carpeta de trabajo: " + System.getProperty("user.dir"));
+
+        try (Connection con = DriverManager.getConnection(URL)) {
+            Gestora gestora = new Gestora();
+            gestora.cargar(con);
+
+            System.out.println("\n===== CONSULTA DE ALUMNOS =====");
+            System.out.println("Campos: id, nombre, edad, promedio");
+
+            System.out.print("Campos a mostrar (separados por coma): ");
+            String campos = sc.nextLine();
+
+            System.out.print("Campo para filtrar (enter para omitir): ");
+            String filtro = sc.nextLine().trim().toLowerCase();
+
+            String operador = "";
+            String valor = "";
+
+            if (!filtro.isEmpty()) {
+                System.out.print("Operador (=, >, <, >=, <=, !=): ");
+                operador = sc.nextLine().trim();
+
+                System.out.print("Valor a comparar: ");
+                valor = sc.nextLine().trim();
+            }
+
+            System.out.print("Campo para ordenar (enter para omitir): ");
+            String orden = sc.nextLine().trim().toLowerCase();
+
+            System.out.print("Orden ASC o DESC: ");
+            String direccion = sc.nextLine().trim();
+
+            System.out.print("Limite (0 para todos): ");
+            int limite = Integer.parseInt(sc.nextLine());
+
+            gestora.consultar(campos, filtro, operador, valor,
+                    orden, direccion, limite);
+
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+}
+
+class Alumno {
+    int id;
+    String nombre;
+    int edad;
+    double promedio;
+
+    Alumno(int id, String nombre, int edad, double promedio) {
+        this.id = id;
+        this.nombre = nombre;
+        this.edad = edad;
+        this.promedio = promedio;
+    }
+}
+
+class Gestora {
+    Alumno[] alumnos = new Alumno[0];
+
+    void cargar(Connection con) throws SQLException {
+        ArrayList<Alumno> lista = new ArrayList<>();
+
+        try (Statement st = con.createStatement()) {
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS alumnos "
+                    + "(id INTEGER PRIMARY KEY, nombre TEXT NOT NULL, "
+                    + "edad INTEGER, promedio REAL)");
+        }
+
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT id, nombre, edad, promedio FROM alumnos");
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                lista.add(new Alumno(
+                        rs.getInt("id"),
+                        rs.getString("nombre"),
+                        rs.getInt("edad"),
+                        rs.getDouble("promedio")
+                ));
+            }
+        }
+
+        alumnos = lista.toArray(new Alumno[0]);
+        System.out.println("Registros cargados: " + alumnos.length);
+    }
+
+    Object obtener(Alumno a, String campo) {
+        switch (campo.toLowerCase()) {
+            case "id": return a.id;
+            case "nombre": return a.nombre;
+            case "edad": return a.edad;
+            case "promedio": return a.promedio;
+            default: throw new IllegalArgumentException(
+                    "Campo incorrecto: " + campo);
+        }
+    }
+
+    int comparar(Object a, Object b) {
+        if (a instanceof Number && b instanceof Number) {
+            return Double.compare(
+                    ((Number) a).doubleValue(),
+                    ((Number) b).doubleValue());
+        }
+
+        return a.toString().compareToIgnoreCase(b.toString());
+    }
+
+    boolean cumple(Alumno a, String campo, String op, String valor) {
+        if (campo.isEmpty()) return true;
+
+        Object dato = obtener(a, campo);
+        Object buscado;
+
+        if (dato instanceof Number) {
+            buscado = Double.parseDouble(valor.replace(",", "."));
+        } else {
+            buscado = valor;
+        }
+
+        int resultado = comparar(dato, buscado);
+
+        switch (op) {
+            case "=": return resultado == 0;
+            case "!=": return resultado != 0;
+            case ">": return resultado > 0;
+            case "<": return resultado < 0;
+            case ">=": return resultado >= 0;
+            case "<=": return resultado <= 0;
+            default: throw new IllegalArgumentException(
+                    "Operador incorrecto");
+        }
+    }
+
+    void consultar(String campos, String filtro, String operador,
+                   String valor, String orden, String direccion,
+                   int limite) {
+
+        String[] seleccionados = campos.split(",");
+
+        for (int i = 0; i < seleccionados.length; i++) {
+            seleccionados[i] = seleccionados[i].trim().toLowerCase();
+        }
+
+        for (String campo : seleccionados) {
+            if (!campo.equals("id") && !campo.equals("nombre")
+                    && !campo.equals("edad")
+                    && !campo.equals("promedio")) {
+                throw new IllegalArgumentException(
+                        "Campo incorrecto: " + campo);
+            }
+        }
+
+        ArrayList<Alumno> resultado = new ArrayList<>();
+
+        for (Alumno a : alumnos) {
+            if (cumple(a, filtro, operador, valor)) {
+                resultado.add(a);
+            }
+        }
+
+        if (!orden.isEmpty()) {
+            resultado.sort((a, b) ->
+                    comparar(obtener(a, orden), obtener(b, orden)));
+
+            if (direccion.equalsIgnoreCase("DESC")) {
+                Collections.reverse(resultado);
+            }
+        }
+
+        System.out.println("\n===== RESULTADOS =====");
+        System.out.println(String.join(" | ", seleccionados));
+
+        int cantidad = 0;
+
+        for (Alumno a : resultado) {
+            if (limite > 0 && cantidad >= limite) break;
+
+            for (int i = 0; i < seleccionados.length; i++) {
+                System.out.print(obtener(a, seleccionados[i]));
+
+                if (i < seleccionados.length - 1) {
+                    System.out.print(" | ");
+                }
+            }
+
+            System.out.println();
+            cantidad++;
+        }
+
+        System.out.println("Total mostrado: " + cantidad);
+    }
+}
