@@ -1,1 +1,164 @@
+import java.sql.*;
+import java.util.Scanner;
 
+public class Main {
+	static final String URL = "jdbc:sqlite:ejercicio1.db";
+	static final String CLAVE = "1234";
+	static Scanner sc = new Scanner(System.in);
+
+	public static void main(String[] args) {
+
+		System.out.println("Carpeta de trabajo: " + System.getProperty("user.dir"));
+
+		try (Connection con = DriverManager.getConnection(URL)) {
+			try (Statement st = con.createStatement()) {
+				st.executeUpdate("CREATE TABLE IF NOT EXISTS alumnos "
+						+ "(id INTEGER PRIMARY KEY, nombre TEXT NOT NULL, " + "edad INTEGER, promedio REAL)");
+			}
+
+			int opcion;
+			do {
+				System.out.println("\n===== MENU DE ALUMNOS =====");
+				System.out.println("1. Ingresar alumno");
+				System.out.println("2. Eliminar alumno");
+				System.out.println("3. Actualizar alumno");
+				System.out.println("4. Mostrar alumnos");
+				System.out.println("5. Salir");
+				opcion = leerInt("Opcion: ");
+
+				try {
+					switch (opcion) {
+					case 1:
+						con.setAutoCommit(false);
+						insertar(con);
+						confirmar(con);
+						break;
+					case 2:
+						con.setAutoCommit(false);
+						eliminar(con);
+						confirmar(con);
+						break;
+					case 3:
+						con.setAutoCommit(false);
+						actualizar(con);
+						confirmar(con);
+						break;
+					case 4:
+						mostrar(con);
+						break;
+					case 5:
+						System.out.println("Programa finalizado");
+						break;
+					default:
+						System.out.println("Opcion incorrecta");
+					}
+				} catch (SQLException e) {
+					if (!con.getAutoCommit()) {
+						con.rollback();
+					}
+					System.out.println("Error: " + e.getMessage());
+				} finally {
+					if (!con.getAutoCommit()) {
+						con.setAutoCommit(true);
+					}
+				}
+			} while (opcion != 5);
+
+		} catch (SQLException e) {
+			System.out.println("Error: " + e.getMessage());
+		}
+	}
+
+	static int leerInt(String mensaje) {
+		while (true) {
+			try {
+				System.out.print(mensaje);
+				return Integer.parseInt(sc.nextLine());
+			} catch (NumberFormatException e) {
+				System.out.println("Ingrese un numero entero.");
+			}
+		}
+	}
+
+	static double leerDouble(String mensaje) {
+		while (true) {
+			try {
+				System.out.print(mensaje);
+				return Double.parseDouble(sc.nextLine().replace(",", "."));
+			} catch (NumberFormatException e) {
+				System.out.println("Ingrese un numero valido.");
+			}
+		}
+	}
+
+	static void insertar(Connection con) throws SQLException {
+		int id = leerInt("ID: ");
+		System.out.print("Nombre: ");
+		String nombre = sc.nextLine();
+		int edad = leerInt("Edad: ");
+		double promedio = leerDouble("Promedio: ");
+
+		String sql = "INSERT INTO alumnos VALUES (?, ?, ?, ?)";
+
+		try (PreparedStatement ps = con.prepareStatement(sql)) {
+			ps.setInt(1, id);
+			ps.setString(2, nombre);
+			ps.setInt(3, edad);
+			ps.setDouble(4, promedio);
+			ps.executeUpdate();
+		}
+	}
+
+	static void eliminar(Connection con) throws SQLException {
+		int id = leerInt("ID a eliminar: ");
+
+		try (PreparedStatement ps = con.prepareStatement("DELETE FROM alumnos WHERE id=?")) {
+			ps.setInt(1, id);
+			System.out.println("Filas afectadas: " + ps.executeUpdate());
+		}
+	}
+
+	static void actualizar(Connection con) throws SQLException {
+		int id = leerInt("ID a actualizar: ");
+		System.out.print("Nuevo nombre: ");
+		String nombre = sc.nextLine();
+		int edad = leerInt("Nueva edad: ");
+		double promedio = leerDouble("Nuevo promedio: ");
+
+		String sql = "UPDATE alumnos SET nombre=?, edad=?, promedio=? WHERE id=?";
+
+		try (PreparedStatement ps = con.prepareStatement(sql)) {
+			ps.setString(1, nombre);
+			ps.setInt(2, edad);
+			ps.setDouble(3, promedio);
+			ps.setInt(4, id);
+			System.out.println("Filas afectadas: " + ps.executeUpdate());
+		}
+	}
+
+	static void mostrar(Connection con) throws SQLException {
+		try (PreparedStatement ps = con.prepareStatement("SELECT * FROM alumnos ORDER BY id");
+				ResultSet rs = ps.executeQuery()) {
+
+			System.out.println("ID | NOMBRE | EDAD | PROMEDIO");
+
+			while (rs.next()) {
+				System.out.println(rs.getInt("id") + " | " + rs.getString("nombre") + " | " + rs.getInt("edad") + " | "
+						+ rs.getDouble("promedio"));
+			}
+		}
+	}
+
+	static void confirmar(Connection con) throws SQLException {
+		System.out.print("Ingrese clave para confirmar: ");
+		String clave = sc.nextLine();
+
+		if (CLAVE.equals(clave)) {
+			con.commit();
+			System.out.println("Cambios guardados correctamente.");
+		} else {
+			con.rollback();
+			System.out.println("Clave incorrecta. Cambios revertidos.");
+		}
+	}
+}
